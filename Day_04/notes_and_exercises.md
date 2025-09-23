@@ -151,83 +151,61 @@ ping6 -c 4 2001:4860:4860::8888
 
 ## Practical Exercises
 
-### Exercise 1: Subnetting Calculator Script
-```python
-#!/usr/bin/env python3
-import ipaddress
-
-def subnet_calculator(network, new_prefix):
-    """Calculate subnets from a given network"""
-    net = ipaddress.IPv4Network(network, strict=False)
-    subnets = list(net.subnets(new_prefix=new_prefix))
-    
-    print(f"Original network: {net}")
-    print(f"Subnetting into /{new_prefix} networks:")
-    print("-" * 50)
-    
-    for i, subnet in enumerate(subnets[:8]):  # Show first 8 subnets
-        hosts = list(subnet.hosts())
-        print(f"Subnet {i+1}: {subnet}")
-        print(f"  Network: {subnet.network_address}")
-        print(f"  Broadcast: {subnet.broadcast_address}")
-        print(f"  First Host: {hosts[0] if hosts else 'N/A'}")
-        print(f"  Last Host: {hosts[-1] if hosts else 'N/A'}")
-        print(f"  Total Hosts: {len(hosts)}")
-        print()
-
-# Example usage
-subnet_calculator('192.168.1.0/24', 26)
-```
-
-### Exercise 2: Route Monitoring Script
+### Exercise 1: Simple Subnet Calculator
 ```bash
 #!/bin/bash
-# Monitor routing table changes
+# Basic subnet calculator using ipcalc
 
-LOGFILE="/var/log/route_monitor.log"
+NETWORK=${1:-"192.168.1.0/24"}
 
-echo "Starting route monitoring..."
-echo "$(date): Route monitoring started" >> $LOGFILE
+echo "Subnet Calculator for: $NETWORK"
+echo "================================"
 
+if command -v ipcalc &> /dev/null; then
+    ipcalc $NETWORK
+else
+    echo "ipcalc not available. Install with: sudo apt install ipcalc"
+fi
+```
+
+### Exercise 2: Route Monitor
+```bash
+#!/bin/bash
+# Simple route monitoring
+
+echo "Route Monitor"
+echo "============="
+
+echo "Current routes:"
+ip route show
+
+echo -e "\nMonitoring route changes..."
 while true; do
-    CURRENT_ROUTES=$(ip route show | sort)
-    
-    if [ -f /tmp/previous_routes ]; then
-        DIFF=$(diff /tmp/previous_routes <(echo "$CURRENT_ROUTES"))
-        if [ ! -z "$DIFF" ]; then
-            echo "$(date): Routing table changed" >> $LOGFILE
-            echo "$DIFF" >> $LOGFILE
-            echo "Route change detected at $(date)"
+    ip route show > /tmp/routes_current.txt
+    if [ -f /tmp/routes_previous.txt ]; then
+        if ! diff -q /tmp/routes_previous.txt /tmp/routes_current.txt > /dev/null; then
+            echo "$(date): Route table changed"
         fi
     fi
-    
-    echo "$CURRENT_ROUTES" > /tmp/previous_routes
-    sleep 30
+    mv /tmp/routes_current.txt /tmp/routes_previous.txt
+    sleep 10
 done
 ```
 
-### Exercise 3: NAT Configuration with iptables
+### Exercise 3: Simple NAT Setup
 ```bash
 #!/bin/bash
-# Configure NAT/PAT with iptables
+# Basic NAT configuration
+
+echo "Setting up basic NAT..."
 
 # Enable IP forwarding
 echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
 
-# Configure masquerading (PAT)
+# Configure masquerading
 sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
-# Allow forwarding from internal to external
-sudo iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT
-
-# Allow established connections back
-sudo iptables -A FORWARD -i eth0 -o eth1 -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# View NAT table
-sudo iptables -t nat -L -n -v
-
-# Monitor active connections
-sudo conntrack -L | head -10
+echo "NAT configured. View with: sudo iptables -t nat -L"
 ```
 
 ## Sample Exercises

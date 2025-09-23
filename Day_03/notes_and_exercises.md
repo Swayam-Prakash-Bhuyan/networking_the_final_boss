@@ -236,397 +236,78 @@ sudo ip link delete veth2
 
 ## Practical Exercises
 
-### Exercise 1: ARP Monitoring and Analysis Tool
-```python
-#!/usr/bin/env python3
-import subprocess
-import time
-import json
-from datetime import datetime
-
-class ARPMonitor:
-    def __init__(self):
-        self.arp_table = {}
-        self.changes = []
-    
-    def get_arp_table(self):
-        """Get current ARP table"""
-        try:
-            result = subprocess.run(['arp', '-a'], capture_output=True, text=True)
-            current_table = {}
-            
-            for line in result.stdout.strip().split('\n'):
-                if line and '(' in line:
-                    # Parse: hostname (ip) at mac [ether] on interface
-                    parts = line.split()
-                    if len(parts) >= 4:
-                        ip = parts[1].strip('()')
-                        mac = parts[3]
-                        current_table[ip] = mac
-            
-            return current_table
-        except Exception as e:
-            print(f"Error getting ARP table: {e}")
-            return {}
-    
-    def detect_changes(self, new_table):
-        """Detect changes in ARP table"""
-        changes = []
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Check for new entries
-        for ip, mac in new_table.items():
-            if ip not in self.arp_table:
-                changes.append({
-                    'timestamp': timestamp,
-                    'type': 'NEW',
-                    'ip': ip,
-                    'mac': mac
-                })
-            elif self.arp_table[ip] != mac:
-                changes.append({
-                    'timestamp': timestamp,
-                    'type': 'CHANGED',
-                    'ip': ip,
-                    'old_mac': self.arp_table[ip],
-                    'new_mac': mac
-                })
-        
-        # Check for removed entries
-        for ip in self.arp_table:
-            if ip not in new_table:
-                changes.append({
-                    'timestamp': timestamp,
-                    'type': 'REMOVED',
-                    'ip': ip,
-                    'mac': self.arp_table[ip]
-                })
-        
-        return changes
-    
-    def monitor(self, duration=60, interval=5):
-        """Monitor ARP table for changes"""
-        print(f"Monitoring ARP table for {duration} seconds...")
-        print("=" * 50)
-        
-        start_time = time.time()
-        self.arp_table = self.get_arp_table()
-        
-        print(f"Initial ARP table ({len(self.arp_table)} entries):")
-        for ip, mac in self.arp_table.items():
-            print(f"  {ip:15} -> {mac}")
-        print()
-        
-        while time.time() - start_time < duration:
-            time.sleep(interval)
-            
-            new_table = self.get_arp_table()
-            changes = self.detect_changes(new_table)
-            
-            if changes:
-                for change in changes:
-                    print(f"[{change['timestamp']}] {change['type']}: {change['ip']}")
-                    if change['type'] == 'NEW':
-                        print(f"  Added: {change['mac']}")
-                    elif change['type'] == 'CHANGED':
-                        print(f"  Changed: {change['old_mac']} -> {change['new_mac']}")
-                    elif change['type'] == 'REMOVED':
-                        print(f"  Removed: {change['mac']}")
-                
-                self.changes.extend(changes)
-            
-            self.arp_table = new_table
-        
-        print(f"\nMonitoring complete. Total changes: {len(self.changes)}")
-        return self.changes
-
-if __name__ == "__main__":
-    monitor = ARPMonitor()
-    try:
-        changes = monitor.monitor(duration=30, interval=2)
-        
-        # Save changes to file
-        if changes:
-            with open('arp_changes.json', 'w') as f:
-                json.dump(changes, f, indent=2)
-            print("Changes saved to arp_changes.json")
-    except KeyboardInterrupt:
-        print("\nMonitoring stopped by user")
-```
-
-### Exercise 2: VLAN Traffic Analysis
+### Exercise 1: ARP Monitor
 ```bash
 #!/bin/bash
-# VLAN Traffic Analysis Script
+# Simple ARP monitoring
 
-echo "VLAN Traffic Analysis Tool"
-echo "========================="
+echo "ARP Table Monitor"
+echo "================="
 
-# Function to capture VLAN tagged traffic
-capture_vlan_traffic() {
-    local interface=${1:-"eth0"}
-    local duration=${2:-10}
-    local output_file="vlan_capture.pcap"
-    
-    echo "Capturing VLAN traffic on $interface for ${duration}s..."
-    
-    # Capture packets with VLAN tags
-    sudo tcpdump -i $interface -w $output_file -c 100 vlan 2>/dev/null &
-    TCPDUMP_PID=$!
-    
-    # Wait for capture duration
-    sleep $duration
-    
-    # Stop capture
-    sudo kill $TCPDUMP_PID 2>/dev/null
-    
-    if [ -f "$output_file" ]; then
-        echo "Analyzing captured VLAN traffic..."
-        
-        # Analyze VLAN tags
-        tcpdump -r $output_file -n vlan 2>/dev/null | while read line; do
-            if [[ $line == *"vlan"* ]]; then
-                vlan_id=$(echo $line | grep -o 'vlan [0-9]*' | awk '{print $2}')
-                echo "VLAN $vlan_id traffic detected"
-            fi
-        done | sort | uniq -c
-        
-        # Cleanup
-        rm -f $output_file
-    else
-        echo "No VLAN traffic captured"
-    fi
-}
+# Show current ARP table
+echo "Current ARP entries:"
+arp -a
 
-# Function to simulate VLAN configuration
-simulate_vlan_config() {
-    echo "\nVLAN Configuration Simulation:"
-    echo "------------------------------"
-    
-    # Show current VLAN configuration
-    if [ -f "/proc/net/vlan/config" ]; then
-        echo "Current VLAN interfaces:"
-        cat /proc/net/vlan/config
-    else
-        echo "No VLAN interfaces configured"
-    fi
-    
-    # Show network interfaces that could support VLANs
-    echo "\nPhysical interfaces available for VLAN tagging:"
-    ip link show | grep -E "^[0-9]+:" | grep -E "eth|ens|enp" | awk -F: '{print $2}' | sed 's/^ *//'
-}
-
-# Function to test VLAN connectivity
-test_vlan_connectivity() {
-    local vlan_interface=$1
-    
-    if [ -z "$vlan_interface" ]; then
-        echo "Usage: test_vlan_connectivity <vlan_interface>"
-        return 1
-    fi
-    
-    echo "\nTesting VLAN connectivity on $vlan_interface:"
-    echo "--------------------------------------------"
-    
-    # Check if interface exists
-    if ip link show $vlan_interface >/dev/null 2>&1; then
-        # Get interface IP
-        local ip=$(ip addr show $vlan_interface | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
-        
-        if [ -n "$ip" ]; then
-            echo "Interface IP: $ip"
-            
-            # Test local connectivity
-            echo "Testing local interface..."
-            ping -c 2 -I $vlan_interface $ip >/dev/null 2>&1 && echo "✓ Local ping successful" || echo "✗ Local ping failed"
-            
-            # Test gateway (if exists)
-            local gateway=$(ip route show dev $vlan_interface | grep default | awk '{print $3}')
-            if [ -n "$gateway" ]; then
-                echo "Testing gateway $gateway..."
-                ping -c 2 -I $vlan_interface $gateway >/dev/null 2>&1 && echo "✓ Gateway ping successful" || echo "✗ Gateway ping failed"
-            fi
-        else
-            echo "No IP address configured on $vlan_interface"
+# Monitor ARP changes
+echo -e "\nMonitoring ARP changes (Ctrl+C to stop)..."
+while true; do
+    arp -a > /tmp/arp_current.txt
+    if [ -f /tmp/arp_previous.txt ]; then
+        if ! diff -q /tmp/arp_previous.txt /tmp/arp_current.txt > /dev/null; then
+            echo "$(date): ARP table changed"
         fi
-    else
-        echo "VLAN interface $vlan_interface does not exist"
     fi
-}
-
-# Main execution
-echo "Select an option:"
-echo "1. Capture and analyze VLAN traffic"
-echo "2. Show VLAN configuration"
-echo "3. Test VLAN connectivity"
-read -p "Enter choice (1-3): " choice
-
-case $choice in
-    1)
-        read -p "Enter interface name (default: eth0): " interface
-        interface=${interface:-eth0}
-        capture_vlan_traffic $interface
-        ;;
-    2)
-        simulate_vlan_config
-        ;;
-    3)
-        read -p "Enter VLAN interface name (e.g., eth0.100): " vlan_int
-        test_vlan_connectivity $vlan_int
-        ;;
-    *)
-        echo "Invalid choice"
-        ;;
-esac
+    mv /tmp/arp_current.txt /tmp/arp_previous.txt
+    sleep 5
+done
 ```
 
-### Exercise 3: Switch Port Security Simulator
-```python
-#!/usr/bin/env python3
-import subprocess
-import time
-import re
-from collections import defaultdict
+### Exercise 2: VLAN Interface Creator
+```bash
+#!/bin/bash
+# Simple VLAN interface management
 
-class SwitchPortSecurity:
-    def __init__(self, interface="eth0", max_macs=5):
-        self.interface = interface
-        self.max_macs = max_macs
-        self.learned_macs = set()
-        self.violations = []
+create_vlan() {
+    local interface=$1
+    local vlan_id=$2
     
-    def get_interface_macs(self):
-        """Get MAC addresses seen on interface using ARP and bridge tables"""
-        macs = set()
-        
-        try:
-            # Get MACs from ARP table
-            result = subprocess.run(['arp', '-a'], capture_output=True, text=True)
-            for line in result.stdout.split('\n'):
-                if line.strip():
-                    # Extract MAC address
-                    mac_match = re.search(r'([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}', line)
-                    if mac_match:
-                        macs.add(mac_match.group().lower())
-            
-            # Get MACs from bridge table if available
-            try:
-                result = subprocess.run(['bridge', 'fdb', 'show'], capture_output=True, text=True)
-                for line in result.stdout.split('\n'):
-                    if self.interface in line:
-                        mac_match = re.search(r'^([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}', line)
-                        if mac_match:
-                            macs.add(mac_match.group().lower())
-            except:
-                pass
-                
-        except Exception as e:
-            print(f"Error getting MAC addresses: {e}")
-        
-        return macs
-    
-    def check_port_security(self):
-        """Check for port security violations"""
-        current_macs = self.get_interface_macs()
-        new_macs = current_macs - self.learned_macs
-        
-        violations = []
-        
-        # Check if we exceed maximum MACs
-        total_macs = len(self.learned_macs | current_macs)
-        if total_macs > self.max_macs:
-            violations.append({
-                'type': 'MAX_MAC_EXCEEDED',
-                'current_count': total_macs,
-                'max_allowed': self.max_macs,
-                'new_macs': list(new_macs)
-            })
-        
-        # Update learned MACs
-        self.learned_macs.update(current_macs)
-        
-        return violations, new_macs
-    
-    def monitor_port_security(self, duration=60, interval=5):
-        """Monitor port security violations"""
-        print(f"Monitoring port security on {self.interface}")
-        print(f"Maximum MACs allowed: {self.max_macs}")
-        print(f"Monitoring for {duration} seconds...")
-        print("=" * 50)
-        
-        start_time = time.time()
-        
-        while time.time() - start_time < duration:
-            violations, new_macs = self.check_port_security()
-            
-            if new_macs:
-                print(f"[{time.strftime('%H:%M:%S')}] New MAC(s) learned: {', '.join(new_macs)}")
-            
-            if violations:
-                for violation in violations:
-                    print(f"[{time.strftime('%H:%M:%S')}] VIOLATION: {violation['type']}")
-                    print(f"  Current MACs: {violation['current_count']}/{violation['max_allowed']}")
-                    if violation['new_macs']:
-                        print(f"  New MACs: {', '.join(violation['new_macs'])}")
-                    
-                    # In real switch, this would trigger port shutdown
-                    print(f"  ACTION: Port {self.interface} would be shut down")
-                
-                self.violations.extend(violations)
-            
-            print(f"[{time.strftime('%H:%M:%S')}] Current MAC count: {len(self.learned_macs)}/{self.max_macs}")
-            time.sleep(interval)
-        
-        print(f"\nMonitoring complete.")
-        print(f"Total violations: {len(self.violations)}")
-        print(f"Learned MACs: {len(self.learned_macs)}")
-        
-        if self.learned_macs:
-            print("\nLearned MAC addresses:")
-            for mac in sorted(self.learned_macs):
-                print(f"  {mac}")
-        
-        return self.violations
-    
-    def simulate_mac_flooding(self, count=10):
-        """Simulate MAC flooding attack for testing"""
-        print(f"\nSimulating MAC flooding with {count} fake MACs...")
-        
-        # Generate fake MAC addresses
-        fake_macs = set()
-        for i in range(count):
-            fake_mac = f"02:00:00:00:{i:02x}:{(i+1):02x}"
-            fake_macs.add(fake_mac)
-        
-        # Add fake MACs to learned set
-        self.learned_macs.update(fake_macs)
-        
-        print(f"Added {len(fake_macs)} fake MAC addresses")
-        print(f"Total MAC count: {len(self.learned_macs)}")
-        
-        # Check for violations
-        if len(self.learned_macs) > self.max_macs:
-            print(f"VIOLATION: Exceeded maximum MAC limit ({self.max_macs})")
-            return True
-        
-        return False
+    echo "Creating VLAN $vlan_id on $interface"
+    sudo ip link add link $interface name $interface.$vlan_id type vlan id $vlan_id
+    sudo ip link set $interface.$vlan_id up
+    echo "VLAN interface $interface.$vlan_id created"
+}
 
-if __name__ == "__main__":
-    # Initialize port security monitor
-    monitor = SwitchPortSecurity(interface="eth0", max_macs=3)
-    
-    print("Switch Port Security Simulator")
-    print("==============================")
-    
-    try:
-        # Monitor for violations
-        violations = monitor.monitor_port_security(duration=20, interval=3)
-        
-        # Simulate MAC flooding attack
-        monitor.simulate_mac_flooding(count=8)
-        
-    except KeyboardInterrupt:
-        print("\nMonitoring stopped by user")
+# Usage
+if [ $# -eq 2 ]; then
+    create_vlan $1 $2
+else
+    echo "Usage: $0 <interface> <vlan_id>"
+    echo "Example: $0 eth0 100"
+fi
+```
+
+### Exercise 3: MAC Address Viewer
+```bash
+#!/bin/bash
+# View MAC addresses on network
+
+echo "MAC Address Information"
+echo "======================"
+
+# Show local interface MAC addresses
+echo "Local Interface MAC Addresses:"
+ip link show | grep -E "link/ether" | awk '{print $2}'
+
+# Show ARP table MAC addresses
+echo -e "\nARP Table MAC Addresses:"
+arp -a | awk '{print $4}' | grep -E "([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}"
+
+# Show bridge forwarding database (if available)
+if command -v bridge &> /dev/null; then
+    echo -e "\nBridge Forwarding Database:"
+    bridge fdb show 2>/dev/null | head -5
+fi
+```
 ```
 
 ## Sample Exercises

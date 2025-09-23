@@ -204,176 +204,52 @@ ss -tlnp
 
 ## Practical Exercises
 
-### Exercise 1: TCP Connection Monitor
-```python
-#!/usr/bin/env python3
-import subprocess
-import time
-import re
-
-def get_tcp_connections():
-    """Get current TCP connection statistics"""
-    try:
-        result = subprocess.run(['ss', '-t', 'state', 'all'], 
-                              capture_output=True, text=True)
-        lines = result.stdout.strip().split('\n')[1:]  # Skip header
-        
-        states = {}
-        for line in lines:
-            if 'ESTAB' in line:
-                states['ESTABLISHED'] = states.get('ESTABLISHED', 0) + 1
-            elif 'LISTEN' in line:
-                states['LISTEN'] = states.get('LISTEN', 0) + 1
-            elif 'TIME-WAIT' in line:
-                states['TIME-WAIT'] = states.get('TIME-WAIT', 0) + 1
-        
-        return states
-    except Exception as e:
-        return {'ERROR': str(e)}
-
-def monitor_connections():
-    """Monitor TCP connections continuously"""
-    print("TCP Connection Monitor")
-    print("=" * 40)
-    
-    while True:
-        states = get_tcp_connections()
-        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-        
-        print(f"\n{timestamp}")
-        for state, count in states.items():
-            print(f"  {state}: {count}")
-        
-        time.sleep(5)
-
-if __name__ == "__main__":
-    try:
-        monitor_connections()
-    except KeyboardInterrupt:
-        print("\nMonitoring stopped.")
-```
-
-### Exercise 2: Simple Port Scanner
+### Exercise 1: Connection Monitor
 ```bash
 #!/bin/bash
-# Simple TCP port scanner
+# Simple TCP connection monitor
+
+echo "TCP Connection Monitor"
+echo "====================="
+
+while true; do
+    echo "$(date): $(ss -t state established | wc -l) established connections"
+    sleep 5
+done
+```
+
+### Exercise 2: Port Scanner
+```bash
+#!/bin/bash
+# Basic port scanner
 
 TARGET=${1:-127.0.0.1}
-START_PORT=${2:-1}
-END_PORT=${3:-1000}
-TIMEOUT=${4:-1}
+PORTS="22 80 443 3389"
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <target> [start_port] [end_port] [timeout]"
-    echo "Example: $0 192.168.1.1 1 1000 1"
-    exit 1
-fi
-
-echo "Scanning $TARGET from port $START_PORT to $END_PORT"
-echo "Timeout: ${TIMEOUT}s"
-echo "=" * 50
-
-open_ports=()
-
-for port in $(seq $START_PORT $END_PORT); do
-    if timeout $TIMEOUT bash -c "echo >/dev/tcp/$TARGET/$port" 2>/dev/null; then
+echo "Scanning $TARGET for common ports..."
+for port in $PORTS; do
+    if timeout 1 bash -c "echo >/dev/tcp/$TARGET/$port" 2>/dev/null; then
         echo "Port $port: OPEN"
-        open_ports+=($port)
+    else
+        echo "Port $port: CLOSED"
     fi
 done
-
-echo
-echo "Summary:"
-echo "Open ports: ${open_ports[*]}"
-echo "Total open ports: ${#open_ports[@]}"
 ```
 
-### Exercise 3: Socket Programming Example
-```python
-#!/usr/bin/env python3
-# TCP Server Example
-import socket
-import threading
+### Exercise 3: Simple Echo Server
+```bash
+#!/bin/bash
+# Simple echo server using netcat
 
-def handle_client(client_socket, address):
-    """Handle individual client connections"""
-    print(f"Connection from {address}")
-    
-    try:
-        while True:
-            data = client_socket.recv(1024).decode('utf-8')
-            if not data:
-                break
-            
-            print(f"Received from {address}: {data}")
-            
-            # Echo the data back
-            response = f"Echo: {data}"
-            client_socket.send(response.encode('utf-8'))
-    
-    except Exception as e:
-        print(f"Error handling client {address}: {e}")
-    finally:
-        client_socket.close()
-        print(f"Connection with {address} closed")
+PORT=${1:-8080}
 
-def tcp_server(host='localhost', port=12345):
-    """Simple TCP server"""
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
-    try:
-        server_socket.bind((host, port))
-        server_socket.listen(5)
-        print(f"TCP Server listening on {host}:{port}")
-        
-        while True:
-            client_socket, address = server_socket.accept()
-            client_thread = threading.Thread(
-                target=handle_client, 
-                args=(client_socket, address)
-            )
-            client_thread.daemon = True
-            client_thread.start()
-    
-    except KeyboardInterrupt:
-        print("\nServer shutting down...")
-    finally:
-        server_socket.close()
+echo "Starting echo server on port $PORT"
+echo "Connect with: telnet localhost $PORT"
 
-if __name__ == "__main__":
-    tcp_server()
+while true; do
+    nc -l $PORT -c 'while read line; do echo "Echo: $line"; done'
+done
 ```
-
-```python
-#!/usr/bin/env python3
-# TCP Client Example
-import socket
-
-def tcp_client(host='localhost', port=12345):
-    """Simple TCP client"""
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    try:
-        client_socket.connect((host, port))
-        print(f"Connected to {host}:{port}")
-        
-        while True:
-            message = input("Enter message (or 'quit' to exit): ")
-            if message.lower() == 'quit':
-                break
-            
-            client_socket.send(message.encode('utf-8'))
-            response = client_socket.recv(1024).decode('utf-8')
-            print(f"Server response: {response}")
-    
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        client_socket.close()
-
-if __name__ == "__main__":
-    tcp_client()
 ```
 
 ## Sample Exercises
