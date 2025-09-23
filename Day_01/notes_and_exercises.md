@@ -89,6 +89,253 @@ Bits (Layer 1: Physical transmission)
 - **Top-Down Approach:** Start at Application Layer (Layer 7) and work down
 - **Divide and Conquer:** Isolate the problematic layer to focus troubleshooting efforts
 
+## Hands-On Labs
+
+### Lab 1: OSI Layer Analysis with Wireshark
+```bash
+# Install Wireshark and tcpdump
+sudo apt update
+sudo apt install wireshark tcpdump
+
+# Capture network traffic to analyze OSI layers
+sudo tcpdump -i any -w osi_capture.pcap -c 50 &
+
+# Generate different types of traffic
+ping -c 5 google.com          # ICMP (Layer 3)
+curl -I http://httpbin.org/get # HTTP (Layer 7)
+nslookup google.com            # DNS (Layer 7)
+
+# Stop capture
+sudo pkill tcpdump
+
+# Analyze the capture file
+tcpdump -r osi_capture.pcap -n | head -20
+```
+
+### Lab 2: Protocol Stack Exploration
+```bash
+# Layer 1 - Physical interface status
+ethtool eth0 2>/dev/null || ip link show
+
+# Layer 2 - Data link information
+ip link show
+arp -a
+
+# Layer 3 - Network layer routing
+ip route show
+ping -c 3 8.8.8.8
+
+# Layer 4 - Transport layer ports
+ss -tuln | head -10
+netstat -tuln | head -10
+
+# Layer 7 - Application layer protocols
+curl -v http://httpbin.org/headers
+telnet google.com 80
+# Type: GET / HTTP/1.1
+# Host: google.com
+# [Press Enter twice]
+```
+
+### Lab 3: OSI Troubleshooting Methodology
+```bash
+#!/bin/bash
+# OSI Layer Troubleshooting Script
+
+echo "=== OSI Layer Troubleshooting ==="
+echo "Testing connectivity to google.com"
+echo
+
+# Layer 1 - Physical
+echo "Layer 1 (Physical):"
+if ip link show | grep -q "state UP"; then
+    echo "✓ Network interface is UP"
+else
+    echo "✗ Network interface issues detected"
+fi
+
+# Layer 2 - Data Link
+echo -e "\nLayer 2 (Data Link):"
+if ip link show | grep -q "LOWER_UP"; then
+    echo "✓ Data link layer operational"
+else
+    echo "✗ Data link layer issues"
+fi
+
+# Layer 3 - Network
+echo -e "\nLayer 3 (Network):"
+if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+    echo "✓ Network layer connectivity OK"
+else
+    echo "✗ Network layer connectivity failed"
+fi
+
+# Layer 4 - Transport
+echo -e "\nLayer 4 (Transport):"
+if timeout 3 bash -c "echo >/dev/tcp/google.com/80" 2>/dev/null; then
+    echo "✓ Transport layer (TCP port 80) accessible"
+else
+    echo "✗ Transport layer issues"
+fi
+
+# Layer 7 - Application
+echo -e "\nLayer 7 (Application):"
+if curl -s -I http://google.com | grep -q "HTTP"; then
+    echo "✓ Application layer (HTTP) working"
+else
+    echo "✗ Application layer issues"
+fi
+```
+
+## Practical Exercises
+
+### Exercise 1: OSI Layer Packet Analysis
+```python
+#!/usr/bin/env python3
+import subprocess
+import re
+
+def analyze_packet_layers(interface="any", count=10):
+    """Analyze packets and identify OSI layers"""
+    print(f"Analyzing {count} packets on interface {interface}")
+    print("=" * 50)
+    
+    # Capture packets
+    cmd = f"sudo tcpdump -i {interface} -c {count} -n -v"
+    try:
+        result = subprocess.run(cmd.split(), capture_output=True, text=True, timeout=30)
+        packets = result.stdout
+        
+        # Analyze for different protocols
+        protocols = {
+            'ICMP': len(re.findall(r'ICMP', packets)),
+            'TCP': len(re.findall(r'TCP', packets)),
+            'UDP': len(re.findall(r'UDP', packets)),
+            'HTTP': len(re.findall(r'HTTP', packets)),
+            'DNS': len(re.findall(r'domain', packets))
+        }
+        
+        print("Protocol Distribution:")
+        for protocol, count in protocols.items():
+            if count > 0:
+                print(f"  {protocol}: {count} packets")
+        
+        return protocols
+    except Exception as e:
+        print(f"Error: {e}")
+        return {}
+
+if __name__ == "__main__":
+    analyze_packet_layers()
+```
+
+### Exercise 2: OSI Model Visualization Tool
+```bash
+#!/bin/bash
+# OSI Model Layer Visualization
+
+echo "OSI Model Layer Demonstration"
+echo "=============================="
+
+# Function to show layer information
+show_layer() {
+    local layer=$1
+    local name=$2
+    local protocols=$3
+    local example=$4
+    
+    echo "Layer $layer: $name"
+    echo "  Protocols: $protocols"
+    echo "  Example: $example"
+    echo
+}
+
+# Display all layers
+show_layer 7 "Application" "HTTP, FTP, SMTP, DNS" "Web browser requesting a webpage"
+show_layer 6 "Presentation" "SSL/TLS, JPEG, ASCII" "Encrypting data with HTTPS"
+show_layer 5 "Session" "NetBIOS, RPC, PPTP" "Establishing a database connection"
+show_layer 4 "Transport" "TCP, UDP" "Breaking data into segments with port numbers"
+show_layer 3 "Network" "IP, ICMP, OSPF" "Routing packets across networks"
+show_layer 2 "Data Link" "Ethernet, Wi-Fi, PPP" "Switching frames within a LAN"
+show_layer 1 "Physical" "Cables, Hubs, Repeaters" "Electrical signals on copper wire"
+
+echo "Data Flow Example:"
+echo "================="
+echo "Sending email (user@example.com):"
+echo "L7: SMTP protocol formats the email"
+echo "L6: Text encoding (UTF-8) and possible encryption"
+echo "L5: SMTP session established with mail server"
+echo "L4: TCP segments with port 25 (SMTP)"
+echo "L3: IP packets with source/destination addresses"
+echo "L2: Ethernet frames with MAC addresses"
+echo "L1: Electrical signals transmitted over cable"
+```
+
+### Exercise 3: Network Protocol Mapper
+```python
+#!/usr/bin/env python3
+import socket
+import struct
+
+def get_protocol_info():
+    """Map common protocols to OSI layers"""
+    protocols = {
+        'Layer 7 (Application)': {
+            'HTTP': {'port': 80, 'description': 'Web traffic'},
+            'HTTPS': {'port': 443, 'description': 'Secure web traffic'},
+            'FTP': {'port': 21, 'description': 'File transfer'},
+            'SSH': {'port': 22, 'description': 'Secure shell'},
+            'SMTP': {'port': 25, 'description': 'Email sending'},
+            'DNS': {'port': 53, 'description': 'Domain name resolution'}
+        },
+        'Layer 4 (Transport)': {
+            'TCP': {'description': 'Reliable, connection-oriented'},
+            'UDP': {'description': 'Fast, connectionless'}
+        },
+        'Layer 3 (Network)': {
+            'IPv4': {'description': '32-bit addressing'},
+            'IPv6': {'description': '128-bit addressing'},
+            'ICMP': {'description': 'Error reporting and diagnostics'}
+        },
+        'Layer 2 (Data Link)': {
+            'Ethernet': {'description': 'Wired LAN standard'},
+            'Wi-Fi': {'description': 'Wireless LAN standard'},
+            'ARP': {'description': 'Address resolution protocol'}
+        }
+    }
+    
+    for layer, layer_protocols in protocols.items():
+        print(f"\n{layer}:")
+        print("-" * len(layer))
+        for protocol, info in layer_protocols.items():
+            if 'port' in info:
+                print(f"  {protocol:8} (Port {info['port']:3}): {info['description']}")
+            else:
+                print(f"  {protocol:8}: {info['description']}")
+
+def test_layer4_connectivity(host, port):
+    """Test Layer 4 (Transport) connectivity"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+if __name__ == "__main__":
+    get_protocol_info()
+    
+    print("\n" + "=" * 50)
+    print("Testing Layer 4 Connectivity:")
+    test_ports = [("google.com", 80), ("google.com", 443), ("google.com", 22)]
+    
+    for host, port in test_ports:
+        status = "✓ Open" if test_layer4_connectivity(host, port) else "✗ Closed"
+        print(f"  {host}:{port} - {status}")
+```
+
 ## Sample Exercises
 
 1. **Protocol Layer Mapping:** Map the following protocols to their correct OSI layers:
